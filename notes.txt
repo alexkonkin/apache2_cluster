@@ -1,0 +1,3 @@
+#install srv1 with all povisioners
+vagrant up srv1 --provision --provision-with misc,haproxy
+
