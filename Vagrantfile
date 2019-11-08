@@ -134,6 +134,45 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
    end
 
+  config.vm.define "apache1" do |apache1|
+    apache1.vm.box = "bento/ubuntu-18.04"
+    apache1.vm.hostname = "apache-node1"
+    apache1.vm.network :private_network, ip: "172.16.94.14"
+    config.vm.provision "misc", type: "shell" do |shell|
+       shell.inline = $install_misc
+    end	
+    #config.vm.provision "mysql_cluster", type: "shell" do |shell|
+    #   shell.inline = $install_mysql_cluster
+    #   shell.args = ["mysql-node3","172.16.94.13","false"]
+    #end
+   end
+
+  config.vm.define "apache2" do |apache2|
+    apache2.vm.box = "bento/ubuntu-18.04"
+    apache2.vm.hostname = "apache-node2"
+    apache2.vm.network :private_network, ip: "172.16.94.15"
+    config.vm.provision "misc", type: "shell" do |shell|
+       shell.inline = $install_misc
+    end	
+    #config.vm.provision "mysql_cluster", type: "shell" do |shell|
+    #   shell.inline = $install_mysql_cluster
+    #   shell.args = ["mysql-node3","172.16.94.13","false"]
+    #end
+   end
+
+  config.vm.define "apache3" do |apache3|
+    apache3.vm.box = "bento/ubuntu-18.04"
+    apache3.vm.hostname = "apache-node3"
+    apache3.vm.network :private_network, ip: "172.16.94.16"
+    config.vm.provision "misc", type: "shell" do |shell|
+       shell.inline = $install_misc
+    end	
+    #config.vm.provision "mysql_cluster", type: "shell" do |shell|
+    #   shell.inline = $install_mysql_cluster
+    #   shell.args = ["mysql-node3","172.16.94.13","false"]
+    #end
+   end
+
   config.vm.provider :virtualbox do |vb|
     vb.customize ["modifyvm", :id, "--memory", "320"]
     vb.customize ["modifyvm", :id, "--cpus", "1"]
