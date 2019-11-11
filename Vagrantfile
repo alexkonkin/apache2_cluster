@@ -22,7 +22,7 @@ $install_misc = <<-SCRIPT
   echo    ""
 
    apt update
-   apt install mc -y
+   apt install mc sshpass -y
    echo -e "192.168.1.11       srv1\n192.168.1.12       srv2\n192.168.1.100       srv\n172.16.94.14       apache-node1\n172.16.94.15       apache-node2\n172.16.94.16       apache-node3\n172.16.94.11       mysql-node1\n172.16.94.12       mysql-node2\n172.16.94.13       mysql-node3">> /etc/hosts
    sed -i 's/127.0.1.1/#127.0.1.1/g' /etc/hosts
 SCRIPT
@@ -50,46 +50,35 @@ $install_glusterfs = <<-SCRIPT
   brick_id=$1
   echo    ""
   echo    "------------------------------------------------------------"
-  echo    "|   glusterfs section has been selected to install   |"
+  echo    "|   glusterfs section has been selected to install         |"
   echo    "------------------------------------------------------------"
   echo    ""
   echo    "brick id is :"$brick_id
 
   mkfs.xfs -i size=512 /dev/sdb
-  mkdir -pv /data/glusterfs/var_www/brick${brick_id}
-  echo "/dev/sdb /data/glusterfs/var_www/brick${brick_id} xfs defaults 0 0" >> /etc/fstab
+  mkdir -pv /data/glusterfs/var_www/brick0${brick_id}
+  echo "/dev/sdb /data/glusterfs/var_www/brick0${brick_id} xfs defaults 0 0" >> /etc/fstab
   mount -a
   apt install glusterfs-server -y
   systemctl start glusterd
   systemctl status glusterd
-
-  if [ $brick_id == "01" ];then
-     gluster peer probe apache-node2
-     gluster peer probe apache-node3
-     gluster peer status
-     volume create var_www replica 3 transport tcp apache-node1:/data/glusterfs/var_www/brick01/brick \
-                                                   apache-node2:/data/glusterfs/var_www/brick02/brick \
-                                                   apache-node3:/data/glusterfs/var_www/brick03/brick
-     gluster volume start var_www
-     echo "apache-node1:/var_www /var/www glusterfs defaults,_netdev,fetch-attempts=5 0 0" >> /etc/fstab
-     mount -a
-  fi
 
   case $brick_id in
     1)
        gluster peer probe apache-node2
        gluster peer probe apache-node3
        gluster peer status
-       volume create var_www replica 3 transport tcp apache-node1:/data/glusterfs/var_www/brick01/brick \
+       gluster volume create var_www replica 3 transport tcp apache-node1:/data/glusterfs/var_www/brick01/brick \
                                                      apache-node2:/data/glusterfs/var_www/brick02/brick \
                                                      apache-node3:/data/glusterfs/var_www/brick03/brick
        gluster volume start var_www
        echo "apache-node${brick_id}:/var_www /var/www glusterfs defaults,_netdev,fetch-attempts=5 0 0" >> /etc/fstab
        mount -a
+       sshpass -p 'vagrant' ssh -o StrictHostKeyChecking=no vagrant@apache-node2 'sudo mount -a'
+       sshpass -p 'vagrant' ssh -o StrictHostKeyChecking=no vagrant@apache-node3 'sudo mount -a'
        ;;
     2|3)
        echo "apache-node${brick_id}:/var_www /var/www glusterfs defaults,_netdev,fetch-attempts=5 0 0" >> /etc/fstab
-       mount -a
        ;;
   esac
 SCRIPT
@@ -106,8 +95,9 @@ $install_wordpress = <<-SCRIPT
   mysql -u root -h srv --password=123456 -e "GRANT ALL PRIVILEGES ON wordpress.* TO 'wordpress'; FLUSH PRIVILEGES;"
 
   wget https://wordpress.org/latest.tar.gz -P /tmp/
-  tar -xzf /tmp/latest.tar.gz -C /var/www/
-  chown -R www-data:www-data /var/www/wordpress
+  tar -xvzf /tmp/latest.tar.gz -C /var/www/
+  chown -Rv www-data:www-data /var/www/wordpress
+  cp -v /vagrant/apache/wp-config.php /var/www/wordpress/wp-config.php
 
 SCRIPT
 

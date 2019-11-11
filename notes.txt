@@ -9,3 +9,9 @@ curl -I http://192.168.1.100
 
 curl -b "SRVNAME=server01" -I http://192.168.1.100
 
+#provision of apache1,2,3 nodes
+- install apache2 and apache3 nodes, they will start but don't mount a gluster volume
+- install apache1 node, it will start, create and mount volume and then mount volume for the 2nd and 3rd nodes
+
+
+
