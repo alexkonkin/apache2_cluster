@@ -1,6 +1,6 @@
 VAGRANTFILE_API_VERSION = "2"
 
-$install_mysql_cluster1 = <<-SCRIPT
+$install_test = <<-SCRIPT
   nod_nam=$1
   nod_ip=$2
   is_first_node=$3
@@ -23,7 +23,7 @@ $install_misc = <<-SCRIPT
 
    apt update
    apt install mc sshpass -y
-   echo -e "192.168.1.11       srv1\n192.168.1.12       srv2\n192.168.1.100       srv\n172.16.94.14       apache-node1\n172.16.94.15       apache-node2\n172.16.94.16       apache-node3\n172.16.94.11       mysql-node1\n172.16.94.12       mysql-node2\n172.16.94.13       mysql-node3">> /etc/hosts
+   echo -e "192.168.1.11       srv1\n192.168.1.12       srv2\n192.168.1.100       srv\n172.16.94.14       apache-node1\n172.16.94.15       apache-node2\n172.16.94.16       apache-node3\n172.16.94.11       mysql-node1\n172.16.94.12       mysql-node2\n172.16.94.13       mysql-node3\n172.16.94.17       mysql-slave">> /etc/hosts
    sed -i 's/127.0.1.1/#127.0.1.1/g' /etc/hosts
 SCRIPT
 
@@ -130,11 +130,29 @@ $install_keepalived_haproxy = <<-SCRIPT
   systemctl enable haproxy
 SCRIPT
 
-$install_mysql_cluster = <<-SCRIPT
+$install_mysql_slave = <<-SCRIPT
    nod_nam=$1
    nod_ip=$2
    is_first_node=$3
 
+   echo    ""
+   echo    "-----------------------------------------------------------------"
+   echo    "|   mariadb slave section has been selected to install          |"
+   echo    "-----------------------------------------------------------------"
+   echo    ""
+
+   sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
+   sudo add-apt-repository 'deb [arch=amd64] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.4/ubuntu bionic main'
+   sudo apt update
+   sudo apt install mariadb-server rsync mc -y
+   mysql -uroot -e 'set password = password("123456");'
+SCRIPT
+
+$install_mysql_cluster = <<-SCRIPT
+   nod_nam=$1
+   nod_ip=$2
+   is_first_node=$3
+   gtid=$4
    echo    ""
    echo    "-----------------------------------------------------------------"
    echo    "|   mariadb section has been selected to install                |"
@@ -146,8 +164,6 @@ $install_mysql_cluster = <<-SCRIPT
    sudo apt update
    sudo apt install mariadb-server rsync mc -y
    mysql -uroot -e 'set password = password("123456");'
-
-   echo -e "192.168.1.11       srv1\n192.168.1.12       srv2\n172.16.94.11       mysql-node1\n172.16.94.12       mysql-node2\n172.16.94.13       mysql-node3" >> /etc/hosts
 
 cat > /etc/mysql/conf.d/galera.cnf << "END"
 [mysqld]
@@ -170,6 +186,16 @@ wsrep_sst_method=rsync
 # Galera Node Configuration
 wsrep_node_address="node_ip"
 wsrep_node_name="nm"
+
+#master-slave replication
+# Galera node as master
+wsrep_gtid_mode      = on
+wsrep_gtid_domain_id = 0
+server-id            = 01
+log_slave_updates    = on
+log-bin              = /var/log/mysql/master-bin
+log-bin-index        = /var/log/mysql/master-bin.index
+gtid_domain_id       = "GTID"
 END
 #sed -i 's/node_name/'$(hostname)'/g' /etc/mysql/conf.d/galera.cnf
 #sed -i 's/node_ip/'$(hostname -I|awk '''{print $3}''')'/g' /etc/mysql/conf.d/galera.cnf
@@ -179,6 +205,7 @@ END
 
   sed -i 's/nm/'$nod_nam'/g' /etc/mysql/conf.d/galera.cnf
   sed -i 's/node_ip/'$nod_ip'/g' /etc/mysql/conf.d/galera.cnf
+  sed -i 's/GTID/'$gtid'/g' /etc/mysql/conf.d/galera.cnf
 
   sudo systemctl stop mysql
 
@@ -244,7 +271,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
        config.vm.provision "mysql_cluster", type: "shell" do |shell|
        shell.inline = $install_mysql_cluster
-       shell.args = ["mysql-node1","172.16.94.11","true"]
+       shell.args = ["mysql-node1","172.16.94.11","true","1"]
     end
   end
 
@@ -257,7 +284,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
        config.vm.provision "mysql_cluster", type: "shell" do |shell|
        shell.inline = $install_mysql_cluster
-       shell.args = ["mysql-node2","172.16.94.12","false"]
+       shell.args = ["mysql-node2","172.16.94.12","false","2"]
     end
   end
 
@@ -270,9 +297,22 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
     config.vm.provision "mysql_cluster", type: "shell" do |shell|
        shell.inline = $install_mysql_cluster
-       shell.args = ["mysql-node3","172.16.94.13","false"]
+       shell.args = ["mysql-node3","172.16.94.13","false","3"]
     end
    end
+
+  config.vm.define "mysql4" do |mysql4|
+    mysql4.vm.box = "bento/ubuntu-18.04"
+    mysql4.vm.hostname = "mysql-slave"
+    mysql4.vm.network :private_network, ip: "172.16.94.17"
+    config.vm.provision "misc", type: "shell" do |shell|
+       shell.inline = $install_misc
+    end
+    config.vm.provision "mysql_cluster", type: "shell" do |shell|
+       shell.inline = $install_mysql_slave
+    end
+   end
+
 
   config.vm.define "apache1" do |apache1|
     apache1.vm.box = "bento/ubuntu-18.04"
